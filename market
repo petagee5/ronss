@@ -6,7 +6,7 @@
 -- v8.321: ANTI HTTP 429. cache lokal + guard: kalau kena 429, JANGAN spam retry.
 --   maks 1 HttpGet per re-exec. gagal -> pakai cache lama -> berhenti.
 do
-    local SCRIPT_URL = "https://raw.githubusercontent.com/alzafabocahbocah-boop/ronihub/main/market"
+    local SCRIPT_URL = "https://cdn.jsdelivr.net/gh/petagee5/ronss@main/market"
     local payload = [[
 local URL = "]]..SCRIPT_URL..[["
 local CACHE = "ZenxMarket_cache.lua"
@@ -57,11 +57,11 @@ getgenv().__ZenxMarketExecuting = nil
     end
 end
 
-local VERSION = "8.323"
+local VERSION = "8.325"
 local VERSION_DATE = "v8.304: pisah kotak EXPORT v8.303: fix tombol YA PAKAI ke-block (ZIndex) IMPORT"
 
 warn("============================================")
-warn("  ZENX MARKET LOADING - VERSI 8.323")
+warn("  ZENX MARKET LOADING - VERSI 8.325")
 warn("  (kalau ini gak muncul, file lama yg jalan)")
 warn("============================================")
 
@@ -72,6 +72,32 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local pg = player:WaitForChild("PlayerGui")
+
+-- v8.325: refresh CACHE di background pas load normal (bukan cuma pas hop).
+-- dulu cache market cuma kebentuk pas hop -> load pertama selalu HttpGet -> 429.
+-- sekarang: kalau cache belum ada / expired (>20 mnt), fetch 1x di background + simpen.
+-- pakai guard biar ga dobel fetch. jsDelivr jadi sumbernya (anti-429).
+task.spawn(function()
+    if type(writefile) ~= "function" then return end
+    local CACHE = "ZenxMarket_cache.lua"
+    local CACHE_AGE = "ZenxMarket_cache_time.txt"
+    local need = true
+    if isfile and isfile(CACHE) and isfile(CACHE_AGE) then
+        local ok, t = pcall(readfile, CACHE_AGE)
+        if ok and tonumber(t) and (os.time() - tonumber(t)) < 1200 then need = false end
+    end
+    if not need then return end
+    if getgenv().__ZenxMarketCaching then return end
+    getgenv().__ZenxMarketCaching = true
+    task.wait(3)   -- tunggu bentar biar ga barengan sama request lain
+    local URL = "https://cdn.jsdelivr.net/gh/petagee5/ronss@main/market"
+    local ok, res = pcall(function() return game:HttpGet(URL) end)
+    if ok and type(res) == "string" and #res > 50000 then
+        pcall(function() writefile(CACHE, res) end)
+        pcall(function() writefile(CACHE_AGE, tostring(os.time())) end)
+    end
+    getgenv().__ZenxMarketCaching = nil
+end)
 
 -- v8.279: bunuh GUI ZENX MARKET lama (dr load sebelumnya) biar gak dobel.
 -- DIBUNGKUS task.spawn biar local di dalam gak nambah ke scope chunk utama
